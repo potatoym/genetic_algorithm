@@ -11,7 +11,6 @@ template <class T> void swap (T& a, T& b){
 }
 
 __device__ int rand_int(int *seed){
-	unsigned int ret = 0;
 	unsigned int xi = *(unsigned int *)seed;
 	unsigned int m = 65537 * 67777;
 
@@ -22,14 +21,8 @@ __device__ int rand_int(int *seed){
 }
 
 __device__ float rand_float(int *seed){
-	float r = (float)rand_int(seed);
-	return r / (float)RAND_MAX_GA;
-}
-
-__device__ void generateSpecimen(specimen *s, int *random_seed, size_t index){
-	int i;
-	for(i = 0; i < specimenbits; ++i)
-		s[0].c[i] = (int) rand_int(random_seed) % 2;
+	float r = (float)(rand_int(seed) % 100);
+	return r / 100.0;
 }
 
 __device__ int selectSpecimen(specimen *pop, int size, int *random_seed){
@@ -82,7 +75,7 @@ __global__ void initPopulation(specimen *pop, const int size, const int random_s
 
 __global__ void newGeneration(specimen *pop, specimen *newpop, const int size, const int random_seed){
 	const int i = 2 * (blockIdx.x*blockDim.x + threadIdx.x);
-	if(i >= size) return;
+	if((i + 1) >= size) return;
 
 	specimen parent[2], offspring[2];
 	int seed = random_seed + i;
@@ -113,8 +106,9 @@ __global__ void countFitness(specimen *pop, const int size){
 
 __global__ void findBestSpecimen(specimen *pop, const int size){
 	const int index = threadIdx.x;
-	int bestIndex = index, i;
+	if(index >= THREADS) return;
 
+	int bestIndex = index, i;
 	for(i = index+THREADS; i < size; i += THREADS){
 		if(pop[bestIndex].fitness < pop[i].fitness)
 			bestIndex = i;
@@ -126,8 +120,8 @@ __global__ void findBestSpecimen(specimen *pop, const int size){
 
 	if(index == 0){
 		for(i = 0; i < THREADS; ++i)
-			if(pop[bestIndex].fitness < pop[i].fitness)
-				bestIndex = i;
+			if(pop[bestIndex].fitness < pop[ buffer[i] ].fitness)
+				bestIndex = buffer[i];
 
 		pop[0] = pop[bestIndex];
 	}
@@ -149,7 +143,7 @@ void genetic_algorithm(){
 	for(i = 0; i < 1000; ++i){
 
 		countFitness<<<BLOCKS, THREADS>>>(devPopulation, population);
-		newGeneration<<<BLOCKS, THREADS>>>(devPopulation, devNewPopulation, population, rand() % RAND_MAX_GA);
+		newGeneration<<<BLOCKS, HALF_THREADS>>>(devPopulation, devNewPopulation, population, rand() % RAND_MAX_GA);
 		cudaThreadSynchronize();
 		swap(devPopulation, devNewPopulation); 
 	}

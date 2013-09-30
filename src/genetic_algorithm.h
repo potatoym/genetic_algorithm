@@ -10,15 +10,15 @@
     }
 
 #define THREADS 50
+#define HALF_THREADS ((THREADS / 2)+THREADS)
 #define BLOCKS 10
 
-#define RAND_MAX 100
 #define RAND_MAX_GA 3571
 
 #define specimenbits 63
 typedef struct specimen {
 	float fitness;
-	int c[specimenbits]; //chromosome
+	int c[specimenbits];
 } specimen;
 
 #define pmutation 0.10
@@ -26,4 +26,4 @@ typedef struct specimen {
 
 void genetic_algorithm();
 
-#endif GENETIC_ALGORITHM_H
+#endif //GENETIC_ALGORITHM_H
