@@ -21,7 +21,7 @@ typedef struct specimen {
 	int c[specimenbits];
 } specimen;
 
-#define pmutation 0.10
+#define pmutation 0.01
 #define pcross 0.30
 
 void genetic_algorithm();

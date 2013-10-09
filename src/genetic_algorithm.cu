@@ -1,4 +1,5 @@
 #include <cuda.h>
+#include <curand_kernel.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -125,6 +126,21 @@ __global__ void findBestSpecimen(specimen *pop, const int size){
 
 		pop[0] = pop[bestIndex];
 	}
+}
+
+void print(specimen *gpu_array, int population){
+
+	specimen *array = (specimen *)malloc(sizeof(specimen) * population);
+	cudaMemcpy(array, gpu_array, sizeof(specimen) * population, cudaMemcpyDeviceToHost);
+
+	int i, j;
+	for(i = 0; i < population; ++i){
+		for(j = 0; j < specimenbits; ++j)
+			printf("%d", array[i].c[j]);
+		printf("\n");
+	}
+
+	free(array);
 }
 
 void genetic_algorithm(){
