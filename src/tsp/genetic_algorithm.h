@@ -15,7 +15,7 @@
 
 #define RAND_MAX_GA 3571
 
-#define specimenbits 10
+#define specimenbits 5
 typedef struct specimen {
 	int fitness;
 	int c[specimenbits];

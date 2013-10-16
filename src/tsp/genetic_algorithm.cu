@@ -33,6 +33,12 @@ __global__ void initPopulation(specimen *pop, const int size, curandState *state
 			if(i != j){ swap(pop[id].c[j], pop[id].c[i]); }
 		}
 		states[i] = localState;
+
+		if(id == 0){
+			int p[] = {1,0,3,2,4};
+			for(j = 0; j < specimenbits; ++j)
+				pop[id].c[j] = p[j];
+		}
 	}
 }
 
@@ -40,6 +46,7 @@ __device__ int fitness(const specimen *sp, int* cities){
 	int s = 0, i;
 	for(i = 0; i < specimenbits-1; ++i)
 		s += cities[(sp->c[i]*specimenbits) + sp->c[i+1]];
+	s += cities[(sp->c[i]*specimenbits) + sp->c[0]];
 
 	return s;
 }
@@ -57,41 +64,48 @@ __device__ int selectSpecimen(specimen *pop, int size, curandState &localState){
 	i = curand(&localState) % size;
 	j = (curand(&localState) % (size - 1) + i + 1) % size;
 
-	return (pop[i].fitness > pop[j].fitness) ? i : j;
+	return (pop[i].fitness < pop[j].fitness) ? i : j;
 }
 
 /**
 	читай описание алгоритма в книге description genetic algorithm на стр 220.
 */
+__device__ void setMaska(specimen &parent, specimen &offspring, char *keys){
+	int i, j = 0, k;
+	for(i = 0; i < specimenbits; ++i){
+		k = parent.c[i];
+		if(keys[k] == 1){
+			while(offspring.c[j] != -1) {j++;}
+			offspring.c[j] = k;
+			keys[k] = 0;
+		}
+	}
+}
+
 __device__ void crossover(specimen *parent, specimen *offspring, curandState &localState){
 	char keys[2][specimenbits]; 
-	int i;
+	int i, k;
+	//! Инициализация
+	for(i = 0; i < specimenbits; ++i){
+		keys[0][i] = keys[1][i] = 1;
+		offspring[0].c[i] = offspring[1].c[i] = -1;
+	}
 	
 	//! Создаем маску и оставляем на своих местах элементы соотв. нулевым элементам.
 	for(i = 0; i < specimenbits; ++i){
 		if(curand_normal(&localState) > pcross_maska){
-			keys[0][i] = keys[1][i] = 0;
-			offspring[0].c[i] = parent[0].c[i];
-			offspring[1].c[i] = parent[1].c[i];
-		}else{
-			keys[0][i] = keys[1][i] = 1;
+			k = parent[0].c[i];
+			keys[0][k] = 0;
+			offspring[0].c[i] = k;
+
+			k = parent[1].c[i];
+			keys[1][k] = 0;
+			offspring[1].c[i] = k;
 		}
 	}
 
-	int f = 0, l = 0;
-	for(i = 0; i < specimenbits; ++i){
-		if(keys[0][i] == 1){
-			while(keys[0][f] == 0) {++f;}
-			offspring[0].c[f] = i;
-			keys[0][i] = 0;
-		}
-
-		if(keys[1][i] == 1){
-			while(keys[1][l] == 0) {++l;}
-			offspring[1].c[l] = i;
-			keys[1][i] = 0;
-		}
-	}
+	setMaska(parent[1], offspring[0], keys[0]);
+	setMaska(parent[0], offspring[1], keys[1]);
 
 	offspring[0].fitness = 0;
 	offspring[1].fitness = 0;
@@ -161,7 +175,7 @@ __global__ void findBestSpecimen(specimen *pop, const int size){
 
 	int bestIndex = index, i;
 	for(i = index+THREADS; i < size; i += THREADS){
-		if(pop[bestIndex].fitness < pop[i].fitness)
+		if(pop[bestIndex].fitness > pop[i].fitness)
 			bestIndex = i;
 	}
 
@@ -171,7 +185,7 @@ __global__ void findBestSpecimen(specimen *pop, const int size){
 
 	if(index == 0){
 		for(i = 0; i < THREADS; ++i)
-			if(pop[bestIndex].fitness < pop[ buffer[i] ].fitness)
+			if(pop[bestIndex].fitness > pop[ buffer[i] ].fitness)
 				bestIndex = buffer[i];
 
 		pop[0] = pop[bestIndex];
@@ -186,6 +200,13 @@ int* setupCities(){
 		for(j = 0; j < specimenbits; ++j)
 			matrix[i * specimenbits + j] = (i == j) ? 0 : rand() % 10 + 1;
 	}
+
+	//! Тестовый пример из книги
+	// static int matrix[specimenbits * specimenbits] = {100, 4, 6, 2, 9,
+	// 												  4, 100, 3, 2, 9,
+	// 												  6, 3, 100, 5, 9,
+	// 												  2, 2, 5, 100, 8,
+	// 												  9, 9, 9, 8, 100};
 
 	return matrix;
 }
@@ -222,23 +243,23 @@ void genetic_algorithm(){
 	initPopulation<<<BLOCKS, THREADS>>>(devPopulation, length, states);
 	cudaThreadSynchronize();
 
-	for(i = 0; i < 10; ++i){
+	//! Итерации
+	for(i = 0; i < 30; ++i){
 
 		countFitness<<<BLOCKS, THREADS>>>(devPopulation, cudaCities, length);
 		newGeneration<<<BLOCKS, HALF_THREADS>>>(devPopulation, devNewPopulation, length, states);
 		cudaThreadSynchronize();
-		swap(devPopulation, devNewPopulation); 
+		swap(devPopulation, devNewPopulation);
 	}
 
-	findBestSpecimen<<<1, THREADS>>>(devPopulation, length);
+	countFitness<<<BLOCKS, THREADS>>>(devPopulation, cudaCities, length);
 	cudaThreadSynchronize();
-
-	//print(devPopulation, length);
+	findBestSpecimen<<<1, THREADS>>>(devPopulation, length);
 
 	specimen best;
 	cudaMemcpy(&best, &devPopulation[0], sizeof(specimen), cudaMemcpyDeviceToHost);
 
-	printf("%d\n", best.fitness);
+	printf("%d ", best.fitness);
 
 	cudaFree(cudaCities);
 	cudaFree(states);

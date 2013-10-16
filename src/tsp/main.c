@@ -3,7 +3,9 @@
 
 int main(){
 
-	genetic_algorithm();
+	int i;
+	for(i = 0; i < 30; ++i)
+		genetic_algorithm();
 
 	return 0;
 }
