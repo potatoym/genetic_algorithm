@@ -33,12 +33,6 @@ __global__ void initPopulation(specimen *pop, const int size, curandState *state
 			if(i != j){ swap(pop[id].c[j], pop[id].c[i]); }
 		}
 		states[i] = localState;
-
-		if(id == 0){
-			int p[] = {1,0,3,2,4};
-			for(j = 0; j < specimenbits; ++j)
-				pop[id].c[j] = p[j];
-		}
 	}
 }
 
